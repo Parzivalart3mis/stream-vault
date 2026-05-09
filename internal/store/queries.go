@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -95,21 +94,12 @@ func (s *Store) GetEvents(ctx context.Context, creatorID, evtType, cursor string
 	}
 
 	if cursor != "" {
-		decoded, err := base64.StdEncoding.DecodeString(cursor)
+		cursorTime, cursorID, err := decodeCursor(cursor)
 		if err != nil {
-			return nil, "", fmt.Errorf("invalid cursor: %w", err)
+			return nil, "", err
 		}
-		parts := strings.SplitN(string(decoded), ",", 2)
-		if len(parts) != 2 {
-			return nil, "", fmt.Errorf("malformed cursor")
-		}
-		cursorTime, err := time.Parse(time.RFC3339Nano, parts[0])
-		if err != nil {
-			return nil, "", fmt.Errorf("cursor time parse: %w", err)
-		}
-		cursorID := parts[1]
 		where = append(where, fmt.Sprintf("(created_at, id) < ($%d, $%d)", idx, idx+1))
-		args = append(args, cursorTime.UTC(), cursorID)
+		args = append(args, cursorTime, cursorID)
 		idx += 2
 	}
 
@@ -143,8 +133,7 @@ func (s *Store) GetEvents(ctx context.Context, creatorID, evtType, cursor string
 	if len(events) > limit {
 		events = events[:limit]
 		last := events[len(events)-1]
-		raw := last.CreatedAt.UTC().Format(time.RFC3339Nano) + "," + last.ID.String()
-		nextCursor = base64.StdEncoding.EncodeToString([]byte(raw))
+		nextCursor = encodeCursor(last.CreatedAt, last.ID.String())
 	}
 
 	return events, nextCursor, nil

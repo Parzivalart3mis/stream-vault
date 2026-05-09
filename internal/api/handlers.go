@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -264,6 +265,11 @@ func (h *Handlers) Events(w http.ResponseWriter, r *http.Request) {
 	evtType := q.Get("type")
 	cursor := q.Get("cursor")
 	limit := 50
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
 
 	events, nextCursor, err := h.store.GetEvents(r.Context(), creatorID, evtType, cursor, limit)
 	if err != nil {
