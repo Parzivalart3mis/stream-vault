@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: streamvault
+      POSTGRES_PASSWORD: streamvault
+      POSTGRES_DB: streamvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.18.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./internal/store/migrations:/migrations
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://streamvault:streamvault@postgres:5432/streamvault?sslmode=disable"
+      - "up"
+    restart: on-failure
+
+  app:
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://streamvault:streamvault@postgres:5432/streamvault?sslmode=disable
+      PORT: 8080
+      WORKER_COUNT: 8
+      CHANNEL_CAPACITY: 1000
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
